@@ -15,13 +15,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['replay'])) {
     exit;
 }
 
-// Pull session data
-$caseValues = $_SESSION['case_values'] ?? [];
-$eliminated = $_SESSION['eliminated'] ?? [];
-$playerCase = $_SESSION['player_case'] ?? null;
-
-$dealTaken   = $_SESSION['deal_taken']   ?? false;
-$bankerOffer = $_SESSION['final_amount'] ?? null;
+$caseValues   = $_SESSION['case_values'] ?? [];
+$eliminated   = $_SESSION['eliminated'] ?? [];
+$playerCase   = $_SESSION['player_case'] ?? null;
+$dealTaken    = $_SESSION['deal_taken']   ?? false;
+$bankerOffer  = $_SESSION['final_amount'] ?? null;
+$offerHistory = $_SESSION['offer_history'] ?? [];
+$marketEvents = $_SESSION['market_events'] ?? [];
 
 // Determine final amount and outcome message
 if ($dealTaken && $bankerOffer !== null) {
@@ -32,7 +32,7 @@ if ($dealTaken && $bankerOffer !== null) {
         $finalAmount = $caseValues[$playerCase];
         $outcomeText = "You played to the very end and walked away with whatever was in your case.";
     } else {
-       
+        // Fallback (should not normally happen)
         $finalAmount = 0;
         $outcomeText = "The game ended unexpectedly, so no winnings are recorded.";
     }
@@ -43,7 +43,7 @@ $playerCaseValue = ($playerCase !== null && isset($caseValues[$playerCase]))
     ? $caseValues[$playerCase]
     : null;
 
-// Max possible amount in the game (just for fun stats)
+// Max possible amount in the game (for stats)
 $maxValue = !empty($caseValues) ? max($caseValues) : 0;
 
 // Determine if the player "beat the bank"
@@ -100,6 +100,50 @@ if ($dealTaken && $playerCaseValue !== null) {
                     Highest amount in the game was:
                     <strong>$<?php echo number_format($maxValue, 2); ?></strong>
                 </p>
+
+                <?php if (!empty($marketEvents)): ?>
+                    <h3 style="margin-bottom: 10px;">Market Events</h3>
+                    <ul style="margin-bottom: 20px; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto;">
+                        <?php foreach ($marketEvents as $event): ?>
+                            <li>
+                                Round <?php echo htmlspecialchars($event['round']); ?>:
+                                <?php echo htmlspecialchars($event['description']); ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+
+                <?php if (!empty($offerHistory)): ?>
+                    <h3 style="margin-bottom: 10px;">Banker's Offer History</h3>
+                    <table style="margin: 0 auto 25px auto; border-collapse: collapse; font-size: 0.95rem;">
+                        <tr>
+                            <th style="border-bottom: 1px solid #fff; padding: 5px 10px;">Round</th>
+                            <th style="border-bottom: 1px solid #fff; padding: 5px 10px;">Amount</th>
+                            <th style="border-bottom: 1px solid #fff; padding: 5px 10px;">Type</th>
+                        </tr>
+                        <?php foreach ($offerHistory as $entry): ?>
+                            <tr>
+                                <td style="padding: 4px 10px; text-align: center;">
+                                    <?php echo htmlspecialchars($entry['round']); ?>
+                                </td>
+                                <td style="padding: 4px 10px; text-align: center;">
+                                    $<?php echo number_format($entry['amount'], 2); ?>
+                                </td>
+                                <td style="padding: 4px 10px; text-align: center;">
+                                    <?php
+                                        if ($entry['type'] === 'standard') {
+                                            echo "Standard";
+                                        } elseif ($entry['type'] === 'bluff_low') {
+                                            echo "Bluff";
+                                        } else {
+                                            echo "Pressure";
+                                        }
+                                    ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </table>
+                <?php endif; ?>
 
                 <h3 style="margin-bottom: 15px;">All Briefcase Values</h3>
 

@@ -23,6 +23,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || !isset($_SESSION['game_started'])) 
     $_SESSION['eliminated'] = [];
     $_SESSION['round'] = 1;
     $_SESSION['game_started'] = true;
+
+    // New session-based data structures
+    $_SESSION['offer_history'] = [];
+    $_SESSION['market_events'] = [];
+    $_SESSION['current_event'] = null;
+    $_SESSION['last_event_round'] = 0;
+    $_SESSION['last_revealed_value'] = null;
+    $_SESSION['last_revealed_case'] = null;
+    $_SESSION['deal_taken'] = false;
+    $_SESSION['final_amount'] = null;
+    $_SESSION['current_offer'] = null;
 }
 
 // Handle case selection
@@ -37,11 +48,13 @@ if (isset($_GET['select']) && is_numeric($_GET['select'])) {
         // Otherwise, eliminate this case
         else if ($caseNum != $_SESSION['player_case'] && !in_array($caseNum, $_SESSION['eliminated'])) {
             $_SESSION['eliminated'][] = $caseNum;
+
+            // Track last revealed case & value for progressive revelation message
+            $_SESSION['last_revealed_case'] = $caseNum;
+            $_SESSION['last_revealed_value'] = $_SESSION['case_values'][$caseNum];
             
-            // After elimination, redirect to offer page
-            // (For now, we'll continue on game.php until offer.php is fully implemented)
-            // header('Location: offer.php');
-            // exit;
+            // After elimination, redirect to offer page (logic still in game flow)
+            // (Offer is shown after every 6 eliminated cases below)
         }
     }
 }
@@ -51,6 +64,50 @@ $remainingCases = [];
 for ($i = 1; $i <= 26; $i++) {
     if ($i != $_SESSION['player_case'] && !in_array($i, $_SESSION['eliminated'])) {
         $remainingCases[] = $i;
+    }
+}
+
+// --- Volatile Market Events (random events that alter values) --- //
+// Run at most once per round, starting from round 2
+if (!isset($_SESSION['market_events'])) {
+    $_SESSION['market_events'] = [];
+}
+if (!isset($_SESSION['last_event_round'])) {
+    $_SESSION['last_event_round'] = 0;
+}
+$_SESSION['current_event'] = null;
+
+$currentRound = $_SESSION['round'] ?? 1;
+
+if ($currentRound >= 2 && $_SESSION['last_event_round'] < $currentRound) {
+    // 25% chance of a market event this round
+    $roll = rand(1, 100);
+    if ($roll <= 25) {
+        $type = (rand(0, 1) === 0) ? 'crash' : 'boom';
+        $factor = ($type === 'crash') ? 0.8 : 1.2;
+
+        // Apply factor to all non-eliminated cases (including player's case)
+        for ($i = 1; $i <= 26; $i++) {
+            $isEliminated = in_array($i, $_SESSION['eliminated']);
+            if (!$isEliminated) {
+                $_SESSION['case_values'][$i] = round($_SESSION['case_values'][$i] * $factor, 2);
+            }
+        }
+
+        $description = ($type === 'crash')
+            ? "Market Crash! All remaining case values dropped by 20%."
+            : "Bull Market! All remaining case values increased by 20%.";
+
+        $event = [
+            'round' => $currentRound,
+            'type' => $type,
+            'factor' => $factor,
+            'description' => $description
+        ];
+
+        $_SESSION['market_events'][] = $event;
+        $_SESSION['current_event'] = $description;
+        $_SESSION['last_event_round'] = $currentRound;
     }
 }
 
@@ -85,7 +142,9 @@ if ($_SESSION['player_case'] !== null) {
                 </div>
                 <div class="info-item">
                     <div class="info-label">Remaining Cases</div>
-                    <div class="info-value"><?php echo count($remainingCases) + ($_SESSION['player_case'] ? 1 : 0); ?></div>
+                    <div class="info-value">
+                        <?php echo count($remainingCases) + ($_SESSION['player_case'] ? 1 : 0); ?>
+                    </div>
                 </div>
                 <?php if ($_SESSION['player_case']): ?>
                 <div class="info-item">
@@ -135,27 +194,33 @@ if ($_SESSION['player_case'] !== null) {
                 <?php endfor; ?>
             </div>
             
-            <?php if ($_SESSION['player_case'] === null): ?>
-                <div class="game-message">
+            <div class="game-message">
+                <?php if ($_SESSION['current_event']): ?>
+                    <p style="margin-bottom: 10px; color: #f0c000;">
+                        <?php echo htmlspecialchars($_SESSION['current_event']); ?>
+                    </p>
+                <?php endif; ?>
+
+                <?php if (!empty($_SESSION['last_revealed_value'])): ?>
+                    <p style="margin-bottom: 10px;">
+                        Last revealed: Case #<?php echo htmlspecialchars($_SESSION['last_revealed_case']); ?> contained 
+                        <strong>$<?php echo number_format($_SESSION['last_revealed_value'], 2); ?></strong>.
+                    </p>
+                <?php endif; ?>
+
+                <?php if ($_SESSION['player_case'] === null): ?>
                     <p>Select your briefcase to keep!</p>
-                </div>
-            <?php elseif (count($_SESSION['eliminated']) > 0 && count($_SESSION['eliminated']) % 6 == 0): ?>
-                <div class="game-message">
+                <?php elseif (count($_SESSION['eliminated']) > 0 && count($_SESSION['eliminated']) % 6 == 0): ?>
                     <p>Round complete! The Banker wants to make you an offer.</p>
                     <a href="offer.php" class="button">See Banker's Offer</a>
-                </div>
-            <?php elseif (count($remainingCases) > 0): ?>
-                <div class="game-message">
+                <?php elseif (count($remainingCases) > 0): ?>
                     <p>Select a briefcase to eliminate and reveal its value.</p>
-                </div>
-            <?php else: ?>
-                <div class="game-message">
+                <?php else: ?>
                     <p>All cases eliminated! Final results...</p>
                     <a href="result.php" class="button">View Results</a>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </main>
     </div>
 </body>
 </html>
-

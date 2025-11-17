@@ -7,7 +7,11 @@ if (!isset($_SESSION['game_started']) || !$_SESSION['game_started']) {
     exit;
 }
 
-// Pull session data
+// Ensure structures exist
+if (!isset($_SESSION['offer_history'])) {
+    $_SESSION['offer_history'] = [];
+}
+
 $caseValues = $_SESSION['case_values'] ?? [];
 $eliminated = $_SESSION['eliminated'] ?? [];
 $playerCase = $_SESSION['player_case'] ?? null;
@@ -41,19 +45,64 @@ if (count($remainingValues) === 0) {
     exit;
 }
 
-// Banker algorithm: offer = average remaining * volatility factor
+// Compute base stats for Banker logic
 $average = array_sum($remainingValues) / count($remainingValues);
+$minRemaining = min($remainingValues);
+$maxRemaining = max($remainingValues);
+$countRemaining = count($remainingValues);
+$spread = $maxRemaining - $minRemaining;
 
-// Volatility factor increases slightly each round (early offers are lower)
-$factor = 0.6 + ($round * 0.1); // Round 1 ≈ 0.7, Round 2 ≈ 0.8, etc.
-if ($factor > 0.95) {
-    $factor = 0.95;
+// Simple risk index: how spread out the remaining amounts are
+$riskIndex = ($average > 0) ? ($spread / $average) : 0;
+
+// Volatility factor uses multiple variables: round, riskIndex, base factor
+$volatilityFactor = 0.6 + ($round * 0.05) + min($riskIndex * 0.02, 0.15);
+if ($volatilityFactor > 1.0) {
+    $volatilityFactor = 1.0;
+}
+if ($volatilityFactor < 0.5) {
+    $volatilityFactor = 0.5;
 }
 
-$offer = round($average * $factor, 2);
+// Base Banker offer
+$baseOffer = $average * $volatilityFactor;
 
-// Store current offer in session (for reference in results if needed)
+// --- Banker's Strategic Offers: bluff / pressure / standard --- //
+$offerType = 'standard';
+$offerNote = 'Standard offer based on remaining values.';
+$randomRoll = rand(1, 100);
+
+// Bluff: slightly lower than expected (acts conservative)
+if ($randomRoll <= 25 && $round >= 2) {
+    $offerType = 'bluff_low';
+    $baseOffer *= 0.85;
+    $offerNote = 'Bluff Offer: The Banker is testing if you will accept a lowball deal.';
+}
+// Pressure: slightly higher than expected, but marked as "expiring"
+elseif ($randomRoll >= 76) {
+    $offerType = 'pressure_high';
+    $baseOffer *= 1.10;
+    $offerNote = 'Pressure Offer: A generous, limited-time offer meant to push you into a quick decision.';
+}
+
+$offer = round($baseOffer, 2);
+
+// Build active offer with expiration metadata (for strategic pressure offers)
+$expiresRound = ($offerType === 'pressure_high')
+    ? $round + 1  // expires by next round
+    : $round + 5; // effectively never reached in normal play, but tracked for spec
+
+$activeOffer = [
+    'round'         => $round,
+    'amount'        => $offer,
+    'type'          => $offerType,
+    'expires_round' => $expiresRound
+];
+
+// Store current offer and history
 $_SESSION['current_offer'] = $offer;
+$_SESSION['active_offer']  = $activeOffer;
+$_SESSION['offer_history'][] = $activeOffer;
 
 // Handle player decision (Deal / No Deal)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['decision'])) {
@@ -74,8 +123,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['decision'])) {
 }
 
 // Extra info for display
-$minRemaining = min($remainingValues);
-$maxRemaining = max($remainingValues);
 $totalRemaining = count($remainingCases);
 ?>
 <!DOCTYPE html>
@@ -102,15 +149,37 @@ $totalRemaining = count($remainingCases);
                 <h2 style="font-size: 2.5rem; margin-bottom: 10px;">
                     $<?php echo number_format($offer, 2); ?>
                 </h2>
-                <p style="margin-bottom: 20px; opacity: 0.9;">
+                <p style="margin-bottom: 15px; opacity: 0.9;">
                     Remaining cases: <?php echo $totalRemaining; ?> |
                     Lowest: $<?php echo number_format($minRemaining, 2); ?> |
                     Highest: $<?php echo number_format($maxRemaining, 2); ?>
                 </p>
 
                 <?php if ($playerCase !== null): ?>
-                    <p style="margin-bottom: 20px;">
+                    <p style="margin-bottom: 10px;">
                         Your case: <strong>#<?php echo htmlspecialchars($playerCase); ?></strong> (still unopened)
+                    </p>
+                <?php endif; ?>
+
+                <p style="margin-bottom: 10px; color: #f0c000;">
+                    Offer Type: 
+                    <?php
+                        if ($offerType === 'standard') {
+                            echo "Standard Offer";
+                        } elseif ($offerType === 'bluff_low') {
+                            echo "Bluff Offer (Conservative)";
+                        } else {
+                            echo "Pressure Offer (Aggressive & Time-Limited)";
+                        }
+                    ?>
+                </p>
+                <p style="margin-bottom: 20px; font-size: 0.95rem; opacity: 0.9;">
+                    <?php echo htmlspecialchars($offerNote); ?>
+                </p>
+
+                <?php if ($offerType === 'pressure_high'): ?>
+                    <p style="margin-bottom: 20px; font-size: 0.9rem;">
+                        <em>This pressure offer is marked to expire after the next round of play.</em>
                     </p>
                 <?php endif; ?>
 
