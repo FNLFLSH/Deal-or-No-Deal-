@@ -1,4 +1,4 @@
-# Sprint Methodology — Project Development Summary
+# Sprint Methodology - Project Development Summary
 
 ## Sprint Approach
 Our group selected the **Sprint methodology** to structure and guide the development of our Deal or No Deal web application.  
@@ -9,7 +9,7 @@ We organized the project into a focused, time-boxed sprint with defined delivera
 ## Sprint Plan
 
 ### Sprint Length  
-One week — core development and feature implementation.
+One week - core development and feature implementation.
 
 ### Sprint Goal  
 Deliver a fully functional PHP-based Deal or No Deal game with animated UI, session tracking, Banker logic, additional key features, and a complete game flow from start to finish.
