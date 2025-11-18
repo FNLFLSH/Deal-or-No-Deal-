@@ -1,133 +1,75 @@
 <?php
 session_start();
-
-// If game was not started properly, send user home
-if (!isset($_SESSION['game_started']) || !$_SESSION['game_started']) {
+if (!isset($_SESSION['game_started'])) {
     header('Location: index.php');
     exit;
 }
 
-// Pull session data
 $caseValues = $_SESSION['case_values'] ?? [];
 $eliminated = $_SESSION['eliminated'] ?? [];
 $playerCase = $_SESSION['player_case'] ?? null;
-$round      = $_SESSION['round'] ?? 1;
+$round = $_SESSION['round'] ?? 1;
 
-// Build list of remaining case numbers (including player's case)
-$remainingCases = [];
-for ($i = 1; $i <= 26; $i++) {
-    if (!in_array($i, $eliminated)) {
-        $remainingCases[] = $i;
-    }
-}
-
-// If somehow there's only one case left, go straight to results
-if (count($remainingCases) <= 1) {
-    header('Location: result.php');
-    exit;
-}
-
-// Collect remaining values for Banker algorithm
+// Get remaining values
 $remainingValues = [];
-foreach ($remainingCases as $caseNum) {
-    if (isset($caseValues[$caseNum])) {
-        $remainingValues[] = $caseValues[$caseNum];
+foreach ($caseValues as $i => $v) {
+    if (!in_array($i, $eliminated)) {
+        $remainingValues[] = $v;
     }
 }
 
-// Safety check
-if (count($remainingValues) === 0) {
-    header('Location: result.php');
-    exit;
-}
-
-// Banker algorithm: offer = average remaining * volatility factor
 $average = array_sum($remainingValues) / count($remainingValues);
+$baseOffer = $average * (0.6 + ($round * 0.1));
 
-// Volatility factor increases slightly each round (early offers are lower)
-$factor = 0.6 + ($round * 0.1); // Round 1 ≈ 0.7, Round 2 ≈ 0.8, etc.
-if ($factor > 0.95) {
-    $factor = 0.95;
+$bankerMessage = "🤔 Banker is analyzing your tactics...";
+
+// --- STRATEGIC OFFER SYSTEM ---
+$bluffChance = rand(1, 10);
+if ($bluffChance <= 2) {
+    $offer = $baseOffer * 0.65;
+    $bankerMessage = "😈 Banker tried to bluff you with a LOW offer!";
+} elseif ($round > 3) {
+    $offer = $baseOffer * 1.25;
+    $bankerMessage = "📈 Banker is worried and increased the offer!";
+} else {
+    $offer = $baseOffer;
 }
 
-$offer = round($average * $factor, 2);
-
-// Store current offer in session (for reference in results if needed)
+$offer = number_format($offer, 2);
 $_SESSION['current_offer'] = $offer;
 
-// Handle player decision (Deal / No Deal)
+// Handle decision
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['decision'])) {
-    $decision = $_POST['decision'];
-
-    if ($decision === 'deal') {
-        // Player accepts deal and game ends
+    if ($_POST['decision'] === 'deal') {
         $_SESSION['final_amount'] = $offer;
-        $_SESSION['deal_taken']   = true;
+        $_SESSION['deal_taken'] = true;
         header('Location: result.php');
         exit;
     } else {
-        // Player says "No Deal" – next round, back to game board
-        $_SESSION['round'] = $round + 1;
+        $_SESSION['round']++;
         header('Location: game.php');
         exit;
     }
 }
-
-// Extra info for display
-$minRemaining = min($remainingValues);
-$maxRemaining = max($remainingValues);
-$totalRemaining = count($remainingCases);
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deal or No Deal - Banker's Offer</title>
+    <title>Banker's Offer</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="offer-page">
-    <div class="container">
-        <header>
-            <h1 class="game-title">Banker's Offer</h1>
-            <p class="subtitle">Round <?php echo htmlspecialchars($round); ?> Negotiation</p>
-        </header>
+    <div class="offer-panel">
+        <h1>Banker's Offer</h1>
+        <h2>$<?php echo $offer; ?></h2>
+        <p style="font-style: italic;"><?php echo $bankerMessage; ?></p>
 
-        <main class="offer-content">
-            <div class="offer-panel">
-                <p class="offer-text">
-                    The Banker has analyzed the remaining cases and wants to make you an offer.
-                </p>
-
-                <h2 style="font-size: 2.5rem; margin-bottom: 10px;">
-                    $<?php echo number_format($offer, 2); ?>
-                </h2>
-                <p style="margin-bottom: 20px; opacity: 0.9;">
-                    Remaining cases: <?php echo $totalRemaining; ?> |
-                    Lowest: $<?php echo number_format($minRemaining, 2); ?> |
-                    Highest: $<?php echo number_format($maxRemaining, 2); ?>
-                </p>
-
-                <?php if ($playerCase !== null): ?>
-                    <p style="margin-bottom: 20px;">
-                        Your case: <strong>#<?php echo htmlspecialchars($playerCase); ?></strong> (still unopened)
-                    </p>
-                <?php endif; ?>
-
-                <p style="margin-bottom: 25px; font-weight: bold;">
-                    Do you take the deal... or keep playing?
-                </p>
-
-                <form method="POST" class="offer-buttons">
-                    <button type="submit" name="decision" value="deal" class="button">
-                        Deal
-                    </button>
-                    <button type="submit" name="decision" value="nodeal" class="button">
-                        No Deal
-                    </button>
-                </form>
-            </div>
-        </main>
+        <form method="POST">
+            <button class="button" name="decision" value="deal">Deal</button>
+            <button class="button" name="decision" value="nodeal">No Deal</button>
+        </form>
     </div>
 </body>
 </html>
