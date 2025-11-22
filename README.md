@@ -27,7 +27,7 @@ Deliver a fully functional PHP-based Deal or No Deal game with animated UI, sess
 | Banker Algorithm Page | `offer.php` computing Banker offers, volatility, and strategic offer logic | Immanuella | Completed |
 | Results Page | `result.php` final payouts, offer history, event logs, and summary UI | Immanuella | Completed |
 | Additional Key Features | Market events, progressive value reveals, offer metadata | Dua | Completed |
-| Testing & Bug Fixing | Gameplay testing, fixing edge cases, usability verification | Everyone | Not started |
+| Testing & Bug Fixing | Gameplay testing, fixing edge cases, usability verification | Everyone | Completed |
 | Styling & Animations | CSS animations, responsive layout, UI polish | Shared | Completed |
 
 ---
