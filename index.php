@@ -20,16 +20,19 @@ session_start();
             <div class="rules-section">
                 <h2>How to Play</h2>
                 <ol class="rules-list">
-                    <li>Select one briefcase as your main case</li>
-                    <li>Eliminate other briefcases to reveal their values</li>
-                    <li>The Banker will make you an offer after each round</li>
+                    <li>Select one briefcase as your main case (you'll keep this until the end)</li>
+                    <li>Eliminate 6 briefcases to reveal their values</li>
+                    <li>After every 6 eliminations, the Banker will make you an offer with a 10-second countdown</li>
                     <li>Decide: Deal or No Deal?</li>
-                    <li>If you say "No Deal," continue eliminating cases</li>
+                    <li>If you say "No Deal," continue eliminating 6 more cases for the next offer</li>
+                    <li>You'll receive approximately 4-5 offers throughout the game</li>
                     <li>Win the value in your chosen briefcase or accept the Banker's final offer</li>
+                    <li>Watch out for market events that can change case values!</li>
                 </ol>
             </div>
             
             <form action="game.php" method="POST" class="start-form">
+                <input type="hidden" name="new_game" value="1">
                 <button type="submit" class="start-button">Start Game</button>
             </form>
         </main>
