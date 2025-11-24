@@ -311,13 +311,13 @@ if ($shouldShowOffer) {
     <?php if (isset($showOffer) && $showOffer && isset($_SESSION['offer_countdown']) && $_SESSION['offer_countdown'] > 0): ?>
     <meta http-equiv="refresh" content="1;url=game.php?countdown=1">
     <?php endif; ?>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
     <style>
-        /* Prevent flashing during countdown refresh */
+        /* Prevent flashing during countdown refresh - only when offer is showing */
+        <?php if (isset($showOffer) && $showOffer): ?>
         html, body {
             overflow: hidden;
         }
-        <?php if (isset($showOffer) && $showOffer): ?>
         .container {
             display: none !important;
         }
@@ -369,7 +369,7 @@ if ($shouldShowOffer) {
         }
     </style>
 </head>
-<body class="game-page" <?php if (isset($showOffer) && $showOffer): ?>style="overflow: hidden;"<?php endif; ?>>
+<body class="game-page">
     <?php if (!isset($showOffer) || !$showOffer): ?>
     <div class="container">
         <header>
