@@ -1,4 +1,5 @@
 <?php
+ob_start(); // Start output buffering to prevent header issues
 session_start();
 
 // Initialize game if starting fresh
@@ -56,8 +57,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['decision'])) {
         // Set a flag to prevent showing the same offer again immediately
         $_SESSION['offer_rejected'] = true;
         $_SESSION['last_rejected_round'] = (int)(count($_SESSION['eliminated']) / 6);
+        unset($_SESSION['offer_countdown']); // Clear countdown when decision is made
         header('Location: game.php');
         exit;
+    }
+}
+
+// Handle countdown timer for offers (PHP-based, no JavaScript)
+if (isset($_GET['countdown'])) {
+    // This is a countdown refresh - decrement timer
+    if (isset($_SESSION['offer_countdown']) && $_SESSION['offer_countdown'] > 0) {
+        $_SESSION['offer_countdown']--;
+        
+        // If timer reaches 0, auto-submit "No Deal"
+        if ($_SESSION['offer_countdown'] <= 0) {
+            $_SESSION['offer_rejected'] = true;
+            $_SESSION['last_rejected_round'] = (int)(count($_SESSION['eliminated']) / 6);
+            unset($_SESSION['offer_countdown']);
+            header('Location: game.php');
+            exit;
+        }
     }
 }
 
@@ -78,11 +97,12 @@ if (isset($_GET['select']) && is_numeric($_GET['select'])) {
             $_SESSION['last_revealed_case'] = $caseNum;
             $_SESSION['last_revealed_value'] = $_SESSION['case_values'][$caseNum];
             
-            // Clear offer rejection flag when a new case is eliminated
+            // Clear offer rejection flag and countdown when a new case is eliminated
             // This allows the next offer to show when we reach the next multiple of 6
             if (count($_SESSION['eliminated']) % 6 != 0) {
                 $_SESSION['offer_rejected'] = false;
                 unset($_SESSION['last_rejected_round']);
+                unset($_SESSION['offer_countdown']);
             }
         }
     }
@@ -191,6 +211,11 @@ if ($shouldShowOffer) {
     $showOffer = true;
     $round = $currentRound;
     
+    // Initialize countdown timer if not already set (start at 10 seconds)
+    if (!isset($_SESSION['offer_countdown'])) {
+        $_SESSION['offer_countdown'] = 10;
+    }
+    
     // Update session round to match calculated round (for use in offer calculation)
     $_SESSION['round'] = $round;
     
@@ -247,12 +272,31 @@ if ($shouldShowOffer) {
     ];
     
     // Store current offer and history
-    $_SESSION['current_offer'] = $offer;
-    $_SESSION['active_offer'] = $activeOffer;
+    // Only add to history if we don't already have an offer for this round
     if (!isset($_SESSION['offer_history'])) {
         $_SESSION['offer_history'] = [];
     }
-    $_SESSION['offer_history'][] = $activeOffer;
+    
+    // Check if we already have an offer for this round (to prevent duplicates from countdown refreshes)
+    $offerExists = false;
+    foreach ($_SESSION['offer_history'] as $existingOffer) {
+        if ($existingOffer['round'] == $round) {
+            $offerExists = true;
+            // Use the existing offer instead of recalculating
+            $activeOffer = $existingOffer;
+            $offer = $existingOffer['amount'];
+            $offerType = $existingOffer['type'];
+            break;
+        }
+    }
+    
+    // Only add new offer if it doesn't exist for this round
+    if (!$offerExists) {
+        $_SESSION['offer_history'][] = $activeOffer;
+    }
+    
+    $_SESSION['current_offer'] = $offer;
+    $_SESSION['active_offer'] = $activeOffer;
     
     $currentOffer = $offer;
     $totalRemaining = count($remainingCases) + ($_SESSION['player_case'] ? 1 : 0);
@@ -264,9 +308,69 @@ if ($shouldShowOffer) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deal or No Deal - Game Board</title>
+    <?php if (isset($showOffer) && $showOffer && isset($_SESSION['offer_countdown']) && $_SESSION['offer_countdown'] > 0): ?>
+    <meta http-equiv="refresh" content="1;url=game.php?countdown=1">
+    <?php endif; ?>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Prevent flashing during countdown refresh */
+        html, body {
+            overflow: hidden;
+        }
+        <?php if (isset($showOffer) && $showOffer): ?>
+        .container {
+            display: none !important;
+        }
+        <?php endif; ?>
+        /* Fallback styles for offer modal in case external CSS doesn't load */
+        .offer-modal {
+            display: flex !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: rgba(0, 0, 0, 0.85) !important;
+            z-index: 1000 !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+        .offer-modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+            border-radius: 20px !important;
+            padding: 40px !important;
+            max-width: 600px !important;
+            width: 90% !important;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5) !important;
+            border: 3px solid #f0c000 !important;
+            position: relative !important;
+        }
+        .countdown-timer {
+            position: absolute !important;
+            top: -15px !important;
+            right: -15px !important;
+            width: 70px !important;
+            height: 70px !important;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%) !important;
+            border-radius: 50% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 2.5rem !important;
+            font-weight: bold !important;
+            color: #fff !important;
+            border: 4px solid #fff !important;
+            z-index: 1001 !important;
+            animation: pulse 0.5s ease-in-out infinite !important;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
 </head>
-<body class="game-page">
+<body class="game-page" <?php if (isset($showOffer) && $showOffer): ?>style="overflow: hidden;"<?php endif; ?>>
+    <?php if (!isset($showOffer) || !$showOffer): ?>
     <div class="container">
         <header>
             <h1 class="game-title">Deal or No Deal</h1>
@@ -370,14 +474,19 @@ if ($shouldShowOffer) {
             </div>
         </main>
     </div>
+    <?php endif; ?>
 
     <!-- Offer Popup Modal -->
     <?php if ($showOffer && $currentOffer !== null): ?>
-    <div id="offerModal" class="offer-modal" onclick="event.stopPropagation();">
-        <div class="offer-modal-content" onclick="event.stopPropagation();">
+    <div id="offerModal" class="offer-modal" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 1000; justify-content: center; align-items: center; transform: translateZ(0); backface-visibility: hidden;">
+        <div class="offer-modal-content" style="transform: translateZ(0); backface-visibility: hidden; margin: 0 auto;">
             <div class="offer-header">
                 <h2>The Banker's Offer</h2>
-                <div class="countdown-timer" id="countdown">10</div>
+                <?php if (isset($_SESSION['offer_countdown']) && $_SESSION['offer_countdown'] > 0): ?>
+                <div class="countdown-timer" style="position: absolute; top: -15px; right: -15px; width: 70px; height: 70px; background: <?php echo $_SESSION['offer_countdown'] <= 3 ? 'linear-gradient(135deg, #ff0000 0%, #cc0000 100%)' : 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)'; ?>; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: bold; color: #fff; border: 4px solid #fff; z-index: 1001; margin: 0; padding: 0; box-sizing: border-box; <?php echo $_SESSION['offer_countdown'] <= 3 ? 'animation: pulse 0.5s ease-in-out infinite;' : ''; ?>">
+                    <span style="display: block; width: 100%; height: 100%; line-height: 62px; text-align: center;"><?php echo $_SESSION['offer_countdown']; ?></span>
+                </div>
+                <?php endif; ?>
             </div>
             
             <div class="offer-body">
@@ -429,43 +538,6 @@ if ($shouldShowOffer) {
     </div>
     <?php endif; ?>
 
-    <script>
-        <?php if ($showOffer && $currentOffer !== null): ?>
-        // Show modal immediately
-        document.addEventListener('DOMContentLoaded', function() {
-            const modal = document.getElementById('offerModal');
-            if (modal) {
-                modal.style.display = 'flex';
-                
-                // Start countdown
-                let timeLeft = 10;
-                const countdownElement = document.getElementById('countdown');
-                const offerForm = document.getElementById('offerForm');
-                
-                const countdown = setInterval(function() {
-                    timeLeft--;
-                    countdownElement.textContent = timeLeft;
-                    
-                    // Change color when time is running out
-                    if (timeLeft <= 3) {
-                        countdownElement.style.background = 'linear-gradient(135deg, #ff0000 0%, #cc0000 100%)';
-                        countdownElement.style.animation = 'pulse 0.5s ease-in-out infinite';
-                    }
-                    
-                    if (timeLeft <= 0) {
-                        clearInterval(countdown);
-                        // Auto-select "No Deal" if time runs out
-                        const noDealInput = document.createElement('input');
-                        noDealInput.type = 'hidden';
-                        noDealInput.name = 'decision';
-                        noDealInput.value = 'nodeal';
-                        offerForm.appendChild(noDealInput);
-                        offerForm.submit();
-                    }
-                }, 1000);
-            }
-        });
-        <?php endif; ?>
-    </script>
+<?php ob_end_flush(); // End output buffering ?>
 </body>
 </html>

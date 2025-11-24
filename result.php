@@ -1,4 +1,5 @@
 <?php
+ob_start(); // Start output buffering to prevent header issues
 session_start();
 
 // If game not started, send user home
@@ -121,6 +122,26 @@ $totalEvents = count($marketEvents);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deal or No Deal - Results</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Fallback styles in case external CSS doesn't load */
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .result-panel, .result-hero, .reveal-section, .decision-analysis, .comparison-section, .timeline-section, .whatif-section, .stats-section, .events-section, .all-cases-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+    </style>
 </head>
 <body class="result-page">
     <div class="container">
@@ -225,11 +246,23 @@ $totalEvents = count($marketEvents);
                 </div>
 
                 <!-- Offer Journey Timeline -->
-                <?php if (!empty($offerHistory)): ?>
+                <?php if (!empty($offerHistory)): 
+                    // Deduplicate offers - only show one offer per round
+                    $uniqueOffers = [];
+                    $seenRounds = [];
+                    foreach ($offerHistory as $entry) {
+                        $roundKey = $entry['round'];
+                        // Only add if we haven't seen this round before, or if this is the accepted offer
+                        if (!isset($seenRounds[$roundKey]) || $entry['amount'] == $bankerOffer) {
+                            $uniqueOffers[] = $entry;
+                            $seenRounds[$roundKey] = true;
+                        }
+                    }
+                ?>
                 <div class="timeline-section">
                     <h3 class="section-title">Your Offer Journey</h3>
                     <div class="offer-timeline">
-                        <?php foreach ($offerHistory as $index => $entry): 
+                        <?php foreach ($uniqueOffers as $index => $entry): 
                             $isAccepted = ($entry['amount'] == $bankerOffer);
                             $offerTypeClass = $entry['type'] === 'bluff_low' ? 'bluff' : ($entry['type'] === 'pressure_high' ? 'pressure' : 'standard');
                         ?>
@@ -513,5 +546,6 @@ $totalEvents = count($marketEvents);
             </main>
         <?php endif; ?>
     </div>
+<?php ob_end_flush(); // End output buffering ?>
 </body>
 </html>

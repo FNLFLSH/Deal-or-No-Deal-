@@ -1,4 +1,5 @@
 <?php
+ob_start(); // Start output buffering
 session_start();
 ?>
 <!DOCTYPE html>
@@ -37,6 +38,7 @@ session_start();
             </form>
         </main>
     </div>
+<?php ob_end_flush(); // End output buffering ?>
 </body>
 </html>
 
